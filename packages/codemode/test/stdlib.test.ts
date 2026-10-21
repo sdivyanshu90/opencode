@@ -1176,6 +1176,17 @@ describe("Uint8Array", () => {
 })
 
 describe("TextEncoder and TextDecoder", () => {
+  test.each([
+    ["null", [110, 117, 108, 108]],
+    ["undefined", []],
+    ["", []],
+    ['""', []],
+    ["false", [102, 97, 108, 115, 101]],
+    ["0", [48]],
+  ])("TextEncoder.encode coerces %s without losing null", async (input, expected) => {
+    expect(await value(`return [...new TextEncoder().encode(${input})]`)).toEqual(expected)
+  })
+
   test("round-trips UTF-8 and exposes the standard fields", async () => {
     expect(
       await value(`
