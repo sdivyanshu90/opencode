@@ -1065,10 +1065,36 @@ describe("Uint8Array", () => {
     `),
     ).toEqual([[0, 0], [1, 2, 44], [7, 8], [9, 2, 44], [1, 2, 44], 3, [1, 2]])
     expect((await error(`new Uint8Array(-1)`)).message).toContain("Invalid typed array length: -1")
-    expect((await error(`new Uint8Array(1.5)`)).message).toContain("Invalid typed array length")
     expect((await error(`new Uint8Array(20_000_000)`)).message).toContain("Invalid array length")
     expect((await error(`Uint8Array.from(/x/)`)).message).toContain("received a RegExp")
   })
+
+  test.each([
+    ["1.9", 1],
+    ["0.9", 0],
+    ["-0.9", 0],
+    ["NaN", 0],
+    ['"2.9"', 2],
+    ['"invalid"', 0],
+    ["null", 0],
+    ["undefined", 0],
+    ["", 0],
+    ["true", 1],
+  ])("Uint8Array constructor coerces length %s", async (input, expected) => {
+    expect(await value(`return [...new Uint8Array(${input})]`)).toEqual(Array(expected).fill(0))
+  })
+
+  test.each(["-1.9", "Infinity", "-Infinity", "20_000_000"])(
+    "Uint8Array constructor rejects length %s with RangeError",
+    async (input) => {
+      expect(
+        await value(`
+          try { new Uint8Array(${input}); return false }
+          catch (error) { return error instanceof RangeError }
+        `),
+      ).toBe(true)
+    },
+  )
 
   test("index reads and writes clamp to a byte and ignore out-of-range writes, like JS", async () => {
     expect(

@@ -59,7 +59,7 @@ const constructBytes = <R>(ctx: Interpreter<R>, args: Array<Value>, proto: Obj) 
   if (source !== null && typeof source === "object") {
     return Effect.map(collectBytes(ctx, source, "new Uint8Array(...)"), (bytes) => new Bytes(proto, bytes))
   }
-  const length = source === undefined ? 0 : coerceToNumber(source)
+  const length = coerceToInteger(source)
   if (!Number.isInteger(length) || length < 0) throw rangeError(`Invalid typed array length: ${coerceToString(source)}`)
   checkArrayLength(length)
   return Effect.succeed(new Bytes(proto, new Uint8Array(length)))
