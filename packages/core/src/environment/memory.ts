@@ -91,6 +91,10 @@ export const makeMemoryDriver = (): MemoryDriver => {
         },
         catch: (cause) => failed(value, cause),
       }),
+    copyPermissions: (from, to) =>
+      Effect.all([overrides.read(from, { offset: 0, length: 0 }), overrides.read(to, { offset: 0, length: 0 })], {
+        discard: true,
+      }).pipe(Effect.mapError((cause) => failed(to, cause))),
     list: (value) =>
       Effect.gen(function* () {
         const target = resolveKey(value, true) ?? key(value)

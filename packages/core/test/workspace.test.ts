@@ -408,6 +408,11 @@ it.effect("routes file overrides through the workspace connection without spawni
     )
     expect(yield* files.list(root)).toEqual([{ name: "note.txt", type: "file" }])
 
+    yield* files.write(`${root}/copy.txt`, payload)
+    yield* files.copyPermissions(`${root}/note.txt`, `${root}/copy.txt`)
+    expect((yield* files.read(`${root}/copy.txt`)).bytes).toEqual(payload)
+    yield* files.remove(`${root}/copy.txt`)
+
     yield* files.move(`${root}/note.txt`, `${root}/renamed.txt`)
     expect(yield* files.list(root)).toEqual([{ name: "renamed.txt", type: "file" }])
 

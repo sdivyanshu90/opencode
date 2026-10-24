@@ -308,6 +308,7 @@ const layer = (options: Options) =>
           const overrides: FilesImpl = {
             read: (path, range) => withFiles(path, (files) => files.read(path, range)),
             write: (path, bytes) => withFiles(path, (files) => files.write(path, bytes)),
+            copyPermissions: (from, to) => withFiles(to, (files) => files.copyPermissions(from, to)),
             stat: (path) => withFiles(path, (files) => files.stat(path)),
             list: (path) => withFiles(path, (files) => files.list(path)),
             remove: (path) => withFiles(path, (files) => files.remove(path)),

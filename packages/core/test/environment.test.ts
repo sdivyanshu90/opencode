@@ -47,6 +47,34 @@ describe("no execution plane", () => {
   )
 })
 
+describe("copy permissions", () => {
+  it.live("copies executable mode to an existing file", () =>
+    Effect.gen(function* () {
+      // Windows does not enforce POSIX executable mode bits.
+      if (process.platform === "win32") return
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+      const tmp = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+      )
+      const source = `${tmp.path}/source`
+      yield* Effect.promise(() => fs.writeFile(source, "executable\n"))
+      yield* Effect.promise(() => fs.chmod(source, 0o755))
+      const drivers = [
+        makeFiles(makeLocalDriver(spawner)),
+        ...(process.platform === "linux" ? [execDefaults(spawner)] : []),
+      ]
+      for (const files of drivers) {
+        const destination = `${tmp.path}/${crypto.randomUUID()}`
+        yield* files.write(destination, new TextEncoder().encode("patched\n"))
+        yield* Effect.promise(() => fs.chmod(destination, 0o600))
+        yield* files.copyPermissions(source, destination)
+        expect((yield* Effect.promise(() => fs.stat(destination))).mode & 0o777).toBe(0o755)
+      }
+    }).pipe(Effect.provide(LayerNode.compile(CrossSpawnSpawner.node))),
+  )
+})
+
 environmentConformance("memory environment", () =>
   Effect.sync(() => {
     const driver = makeMemoryDriver()

@@ -228,6 +228,13 @@ export const Plugin = {
                         .write(moveTarget.absolute, new TextEncoder().encode(change.content))
                         .pipe(Effect.mapError((error) => fail(`Failed to write ${moveTarget.resource}`, error)))
                       yield* environment.files
+                        .copyPermissions(change.target.absolute, moveTarget.absolute)
+                        .pipe(
+                          Effect.mapError((error) =>
+                            fail(`Wrote ${moveTarget.resource} but failed to preserve permissions`, error),
+                          ),
+                        )
+                      yield* environment.files
                         .remove(change.target.absolute)
                         .pipe(
                           Effect.mapError((error) =>

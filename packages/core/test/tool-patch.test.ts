@@ -56,6 +56,7 @@ let denyAction: string | undefined
 let failRemoveTarget: string | undefined
 let failRemoveErrorTarget: string | undefined
 let failWriteTarget: string | undefined
+let failCopyPermissions = false
 let readsBeforeEditApproval = 0
 let editApproved = false
 let afterEditApproval = (): Effect.Effect<void> => Effect.void
@@ -92,6 +93,7 @@ const reset = () => {
   failRemoveTarget = undefined
   failRemoveErrorTarget = undefined
   failWriteTarget = undefined
+  failCopyPermissions = false
   readsBeforeEditApproval = 0
   editApproved = false
   afterEditApproval = () => Effect.void
@@ -127,6 +129,10 @@ const withTool = <A, E, R>(
                 return Effect.fail(new Environment.Failed({ path: target, cause: new Error("forced remove failure") }))
               return files.remove(target)
             },
+            copyPermissions: (from, to) =>
+              failCopyPermissions
+                ? Effect.fail(new Environment.Failed({ path: to, cause: new Error("forced permission failure") }))
+                : files.copyPermissions(from, to),
             write: (target, content) => {
               if (failWriteTarget && path.basename(target) === failWriteTarget)
                 return Effect.fail(new Environment.Failed({ path: target, cause: new Error("forced write failure") }))
@@ -457,6 +463,37 @@ describe("PatchTool", () => {
     ),
   )
 
+  it.live("keeps a moved script executable", () =>
+    withTempTool((directory, registry) =>
+      Effect.gen(function* () {
+        // Windows does not enforce POSIX executable mode bits.
+        if (process.platform === "win32") return
+        const source = path.join(directory, "script.sh")
+        const destination = path.join(directory, "nested", "renamed.sh")
+        yield* Effect.promise(() => fs.writeFile(source, "#!/bin/sh\necho before\n", { mode: 0o755 }))
+        const before = Bun.spawnSync([source])
+        expect(before.exitCode).toBe(0)
+        expect(before.stdout.toString()).toBe("before\n")
+
+        expect(
+          yield* executeTool(
+            registry,
+            call(
+              "*** Begin Patch\n*** Update File: script.sh\n*** Move to: nested/renamed.sh\n@@\n-echo before\n+echo after\n*** End Patch",
+            ),
+          ),
+        ).toMatchObject({ status: "completed" })
+
+        const after = Bun.spawnSync(["/bin/sh", "-c", "./nested/renamed.sh"], { cwd: directory })
+        expect(after.stderr.toString()).toBe("")
+        expect(after.exitCode).toBe(0)
+        expect(after.stdout.toString()).toBe("after\n")
+        expect((yield* Effect.promise(() => fs.stat(destination))).mode & 0o777).toBe(0o755)
+        expect(yield* exists(source)).toBe(false)
+      }),
+    ),
+  )
+
   it.live("moves a file without changing its contents", () =>
     withTempTool((directory, registry) =>
       Effect.gen(function* () {
@@ -496,6 +533,33 @@ describe("PatchTool", () => {
         expect(yield* exists(source)).toBe(false)
         expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("before\n")
         expect(yield* Effect.promise(() => fs.readFile(moved, "utf8"))).toBe("after\n")
+      }),
+    ),
+  )
+
+  it.live("keeps a move destination symlink and updates its target", () =>
+    withTempTool((directory, registry) =>
+      Effect.gen(function* () {
+        // Creating symlinks on Windows can require privileges absent in CI.
+        if (process.platform === "win32") return
+        const source = path.join(directory, "old.txt")
+        const target = path.join(directory, "target.txt")
+        const destination = path.join(directory, "link.txt")
+        yield* Effect.promise(() => fs.writeFile(source, "before\n", { mode: 0o755 }))
+        yield* Effect.promise(() => fs.writeFile(target, "existing\n"))
+        yield* Effect.promise(() => fs.symlink(target, destination))
+        expect(
+          (yield* executeTool(
+            registry,
+            call(
+              "*** Begin Patch\n*** Update File: old.txt\n*** Move to: link.txt\n@@\n-before\n+after\n*** End Patch",
+            ),
+          )).status,
+        ).toBe("completed")
+        expect(yield* exists(source)).toBe(false)
+        expect((yield* Effect.promise(() => fs.lstat(destination))).isSymbolicLink()).toBe(true)
+        expect(yield* Effect.promise(() => fs.readFile(target, "utf8"))).toBe("after\n")
+        expect((yield* Effect.promise(() => fs.stat(target))).mode & 0o777).toBe(0o755)
       }),
     ),
   )
@@ -850,6 +914,29 @@ describe("PatchTool", () => {
         })
         expect(yield* Effect.promise(() => fs.readFile(path.join(directory, "first.txt"), "utf8"))).toBe("first\n")
         expect(yield* exists(path.join(directory, "second.txt"))).toBe(false)
+      }),
+    ),
+  )
+
+  it.live("keeps the source when preserving permissions fails", () =>
+    withTempTool((directory, registry) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => fs.writeFile(path.join(directory, "old.txt"), "before\n"))
+        failCopyPermissions = true
+        expect(
+          yield* executeTool(
+            registry,
+            call("*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-before\n+after\n*** End Patch"),
+          ),
+        ).toEqual({
+          status: "error",
+          error: {
+            type: "tool.execution",
+            message: "Wrote new.txt but failed to preserve permissions: forced permission failure",
+          },
+        })
+        expect(yield* Effect.promise(() => fs.readFile(path.join(directory, "old.txt"), "utf8"))).toBe("before\n")
+        expect(yield* Effect.promise(() => fs.readFile(path.join(directory, "new.txt"), "utf8"))).toBe("after\n")
       }),
     ),
   )

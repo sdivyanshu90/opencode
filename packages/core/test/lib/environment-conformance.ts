@@ -108,6 +108,24 @@ export const environmentConformance = <E>(
       }),
     )
 
+    check("copies permissions without changing file contents", (harness) =>
+      Effect.gen(function* () {
+        const source = `${harness.root}/source`
+        const destination = `${harness.root}/destination`
+        yield* harness.files.write(source, bytes("original"))
+        yield* harness.files.write(destination, bytes("changed"))
+        yield* harness.files.copyPermissions(source, destination)
+        expect(text((yield* harness.files.read(source)).bytes)).toBe("original")
+        expect(text((yield* harness.files.read(destination)).bytes)).toBe("changed")
+        expect(
+          yield* harness.files.copyPermissions(`${harness.root}/missing`, destination).pipe(Effect.flip),
+        ).toBeInstanceOf(Failed)
+        expect(
+          yield* harness.files.copyPermissions(source, `${harness.root}/missing`).pipe(Effect.flip),
+        ).toBeInstanceOf(Failed)
+      }),
+    )
+
     check("reads byte ranges", (harness) =>
       Effect.gen(function* () {
         const target = `${harness.root}/range`

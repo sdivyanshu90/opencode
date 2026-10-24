@@ -140,6 +140,8 @@ export const execDefaults = (spawner: ChildProcessSpawner["Service"]): FilesImpl
         Effect.flatMap((result) => complete(path, result)),
       ),
     list: (path) => run(path, listScript).pipe(Effect.flatMap((result) => classify(path, result, parseList))),
+    copyPermissions: (from, to) =>
+      run(from, `chmod --reference="$1" -- "$2"`, [to]).pipe(Effect.flatMap((result) => complete(to, result))),
     remove: (path) => run(path, `rm -rf -- "$1"`).pipe(Effect.flatMap((result) => complete(path, result))),
     move: (from, to) =>
       run(from, moveScript, [to]).pipe(Effect.flatMap((result) => classifyPlain(from, result, () => undefined))),

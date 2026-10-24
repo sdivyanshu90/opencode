@@ -40,6 +40,8 @@ export interface FilesImpl {
     range?: { readonly offset: number; readonly length: number },
   ) => Effect.Effect<{ readonly info: FileInfo; readonly bytes: Uint8Array }, NotFound | WrongKind | Failed>
   readonly write: (path: string, bytes: Uint8Array) => Effect.Effect<void, Failed>
+  /** Copies permission bits between existing files, following symlinks; virtual filesystems may not model them. */
+  readonly copyPermissions: (from: string, to: string) => Effect.Effect<void, Failed>
   /** Describes the path entry itself, so a final symlink is reported as `symlink` rather than followed. */
   readonly stat: (path: string) => Effect.Effect<FileInfo, NotFound | Failed>
   /** Follows a final symlink to the listed directory while preserving each returned entry's own type. */
