@@ -33,7 +33,7 @@ const fixture = Effect.gen(function* () {
   return {
     cache: tmp.path,
     base,
-    pull: (skills: unknown[], files: Record<string, string> = {}) =>
+    pull: (skills: unknown[], files: Record<string, string> = {}, url = base) =>
       Effect.gen(function* () {
         state.skills = skills
         state.files = files
@@ -41,7 +41,7 @@ const fixture = Effect.gen(function* () {
         // Rebuild per pull so repeated calls exercise the disk cache, not a shared service.
         const directories = yield* Effect.gen(function* () {
           const discovery = yield* SkillDiscovery.Service
-          return yield* discovery.pull(base)
+          return yield* discovery.pull(url)
         }).pipe(
           Effect.provide(
             AppNodeBuilder.build(SkillDiscovery.node, [Global.node.replace(Global.layerWith({ cache: tmp.path }))]),
@@ -53,6 +53,25 @@ const fixture = Effect.gen(function* () {
 })
 
 describe("SkillDiscovery.pull", () => {
+  for (const suffix of ["?lang=en", "#documentation", "/?lang=en", "/#documentation"]) {
+    it.live(
+      `loads a catalog directory with suffix ${suffix}`,
+      Effect.gen(function* () {
+        const catalog = yield* fixture
+        const result = yield* catalog.pull(
+          [{ name: "deploy", files: ["SKILL.md"] }],
+          { "/catalog/deploy/SKILL.md": "# Deploy" },
+          catalog.base.slice(0, -1) + suffix,
+        )
+        expect(result.requests).toContain(`${catalog.base}index.json`)
+        expect(result.directories).toHaveLength(1)
+        expect(yield* Effect.promise(() => Bun.file(path.join(result.directories[0], "SKILL.md")).text())).toBe(
+          "# Deploy",
+        )
+      }),
+    )
+  }
+
   for (const input of [
     {
       name: "rejects skill name traversal without fetching files",
