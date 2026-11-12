@@ -452,6 +452,35 @@ describe("WebFetchTool registration", () => {
     }),
   )
 
+  it.effect("resolves documentation links against the final page after a redirect", () =>
+    Effect.gen(function* () {
+      reset()
+      const registry = yield* Tool.Service
+      respond = (request) =>
+        Effect.succeed(
+          request.url === "https://example.com/start"
+            ? new Response("", { status: 302, headers: { location: "/docs/reference/page.html" } })
+            : new Response(
+                '<a href="../api">API</a><a href="/guide">Guide</a><a href="#install">Install</a><img src="diagram.png" alt="Diagram">',
+                {
+                  headers: { "content-type": "text/html" },
+                },
+              ),
+        )
+      expect(
+        yield* executeTool(registry, call({ url: "https://example.com/start", format: "markdown" })),
+      ).toMatchObject({
+        status: "completed",
+        content: [
+          {
+            type: "text",
+            text: "[API](https://example.com/docs/api)[Guide](https://example.com/guide)[Install](https://example.com/docs/reference/page.html#install)![Diagram](https://example.com/docs/reference/diagram.png)",
+          },
+        ],
+      })
+    }),
+  )
+
   it.effect("accepts localhost URLs with the same requested-URL permission check", () =>
     Effect.gen(function* () {
       reset()

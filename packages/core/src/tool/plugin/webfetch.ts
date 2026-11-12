@@ -118,9 +118,9 @@ const collectBody = (response: HttpClientResponse.HttpClientResponse) =>
 const mimeFrom = (contentType: string) => contentType.split(";", 1)[0]?.trim().toLowerCase() ?? ""
 const isImageAttachment = (mime: string) =>
   mime.startsWith("image/") && mime !== "image/svg+xml" && mime !== "image/vnd.fastbidsheet"
-const convert = (content: string, contentType: string, format: Format) => {
+const convert = (content: string, contentType: string, format: Format, url: string) => {
   if (!contentType.includes("text/html")) return content
-  if (format === "markdown") return convertHTMLToMarkdown(content)
+  if (format === "markdown") return convertHTMLToMarkdown(content, url)
   if (format === "text") return extractTextFromHTML(content)
   return content
 }
@@ -157,7 +157,7 @@ export const Plugin = {
                 ...Permission.invocation(context),
               })
 
-              const { body, contentType } = yield* Effect.gen(function* () {
+              const { body, contentType, base } = yield* Effect.gen(function* () {
                 const check = (next: string) =>
                   permission.assertNotDenied({
                     action: name,
@@ -174,7 +174,7 @@ export const Plugin = {
                   return yield* Effect.fail(new Error(`Unsupported fetched image content type: ${mime}`))
                 if (!Mime.isTextual(mime))
                   return yield* Effect.fail(new Error(`Unsupported fetched file content type: ${mime}`))
-                return { body: yield* collectBody(response), contentType }
+                return { body: yield* collectBody(response), contentType, base: response.request.url }
               }).pipe(
                 Effect.timeoutOrElse({
                   duration: Duration.seconds(input.timeout ?? DEFAULT_TIMEOUT_SECONDS),
@@ -183,7 +183,7 @@ export const Plugin = {
               )
               const content = new TextDecoder().decode(body)
               const output = yield* Effect.try({
-                try: () => convert(content, contentType, input.format),
+                try: () => convert(content, contentType, input.format, base),
                 catch: (error) => error,
               })
               const result = {

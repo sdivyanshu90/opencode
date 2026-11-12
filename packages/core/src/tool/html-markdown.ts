@@ -50,7 +50,7 @@ type Chunk = string | { raw: string }
 export const MAX_MARKDOWN_BYTES = 5 * 1024 * 1024
 const CONTENT_BYTES = MAX_MARKDOWN_BYTES - 64 * 1024
 
-export function convertHTMLToMarkdown(html: string) {
+export function convertHTMLToMarkdown(html: string, base?: string) {
   const output: Chunk[] = []
   const stack: Frame[] = []
   const encoder = new TextEncoder()
@@ -182,7 +182,8 @@ export function convertHTMLToMarkdown(html: string) {
       )
     }
   }
-  const destination = (value: string) => value.replace(/([\\()])/g, "\\$1").replace(/[\t\n\r ]+/g, "%20")
+  const destination = (value: string) =>
+    (base ? (URL.parse(value, base)?.href ?? value) : value).replace(/([\\()])/g, "\\$1").replace(/[\t\n\r ]+/g, "%20")
   const title = (value: string | undefined) =>
     value
       ? ` "${value
